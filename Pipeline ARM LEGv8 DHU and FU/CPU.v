@@ -20,7 +20,9 @@
 //////////////////////////////////////////////////////////////////////////////////
 module CPU(
     input clk,
-    input Reset		
+    input Reset,
+	 input RX,
+	 output TX		
     );
 
 //Program Counter	
@@ -126,6 +128,12 @@ module CPU(
 
 	wire [63:0] MUXOut4;
 
+//Connections RS232.	
+
+	wire TX_FIN;
+	wire RX_IN;
+	wire [7:0]DOUT;
+	
 //Stage 1 - Instruction Fetch (IF). 
 
 	always @(posedge clk)
@@ -183,7 +191,20 @@ module CPU(
 //Stage 5 - Write back(WB).
 
 	Multiplexer2_1_64Bits Multiplexer4 (ALUResult_WB, DataReadOut_WB, MemtoReg_WB, MUXOut4);
-		 
+
+//Stage  - RS232.
+
+RS232 UART (
+    .CLK(clk), 
+    .RX(RX), 
+    .TX_INI(ALUResult_MEM[8]), 
+    .TX_FIN(TX_FIN), 
+    .TX(TX), 
+    .RX_IN(RX_IN), 
+    .DATAIN(MUXOut6_MEM[7:0]), 
+    .DOUT(DOUT)
+    );
+	 
 endmodule
 
 //Modules.
@@ -204,9 +225,9 @@ module IF_ID(
 	 input clk,
     input Reset,
 	 input [63:0] PC,
-    input [63:0] Instruction,
+    input [31:0] Instruction,
     output reg[63:0] PC_ID,	 
-    output reg[63:0] Instruction_ID
+    output reg[31:0] Instruction_ID
     );	 
 always@(posedge clk)
 		if (Reset)
@@ -788,24 +809,22 @@ module DataMemory(
 	initial 
 		$readmemb("memory/memory.dat", data_mem);
 	always @(Address, DataWrite, MemRead, MemWrite, ChipSelect)
-		if (ChipSelect)
+		if (MemRead && ChipSelect)			
+			DataRead <= {data_mem[Address], data_mem[Address+1], data_mem[Address+2], data_mem[Address+3], data_mem[Address+4], data_mem[Address+5], data_mem[Address+6], data_mem[Address+7]};
+		else if (MemWrite && ChipSelect)
 			begin
-				if (MemRead)			
-					DataRead <= {data_mem[Address], data_mem[Address+1], data_mem[Address+2], data_mem[Address+3], data_mem[Address+4], data_mem[Address+5], data_mem[Address+6], data_mem[Address+7]};
-				else if (MemWrite)
-					begin
-						data_mem[Address] <= DataWrite[7:0];
-						data_mem[Address+1]	<= DataWrite[15:8];
-						data_mem[Address+2]	<= DataWrite[23:16];
-						data_mem[Address+3]	<= DataWrite[31:24];
-						data_mem[Address+4]	<= DataWrite[39:32];
-						data_mem[Address+5]	<= DataWrite[47:40];
-						data_mem[Address+6]	<= DataWrite[55:48];
-						data_mem[Address+7]	<= DataWrite[63:56];
-					end
-				else
-					DataRead <=64'b0;
-			end	
+				data_mem[Address] <= DataWrite[7:0];
+				data_mem[Address+1]	<= DataWrite[15:8];
+				data_mem[Address+2]	<= DataWrite[23:16];
+				data_mem[Address+3]	<= DataWrite[31:24];
+				data_mem[Address+4]	<= DataWrite[39:32];
+				data_mem[Address+5]	<= DataWrite[47:40];
+				data_mem[Address+6]	<= DataWrite[55:48];
+				data_mem[Address+7]	<= DataWrite[63:56];
+			end
+		else
+			DataRead <= 64'b0;
+			
 endmodule
 
 module MEM_WB(
